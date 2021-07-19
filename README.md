@@ -14,3 +14,5 @@ Multiple instances of the application should run and communicate with each other
 3. If the coordinator didn't send alive then the process who dedect this send election message to every process with process id greater than it self
   1. If the process didn't get response it set it self to be the coordinatore and send Victory message to all process. 
 
+
+###  Used Java Socket for inter process communication, because dual message is needed to check alive, election statuses
