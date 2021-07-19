@@ -38,10 +38,6 @@ public class Master {
     }
 
 
-    String[] parseMessage(String message) {
-        return message.split(",");
-    }
-
     public void startListen() {
         while (mainProcess.isActive()) {
             if (mainProcess.isCoordinator()) {
@@ -58,11 +54,9 @@ public class Master {
         }
 
         System.out.println(mainProcess.getPid() + " no coordinator: " + (mainProcess.isCoordinator() ? "Y" : "N"));
-        while (mainProcess.isElecting()) {
-            if (!mainProcess.isCoordinator()) {
-                startElection();
-                receiveMessage(2000);
-            }
+
+        if (!mainProcess.isCoordinator()) {
+            startElection();
         }
     }
 
@@ -92,105 +86,61 @@ public class Master {
         }
     }
 
-    void initiateServerSocket() {
-        System.out.println("Listening to " + mainProcess.getPid());
-        try {
-            serverSocket = new ServerSocket(mainProcess.getPid());
-        } catch (Exception e) {
-            System.out.println("can't listen on " + e.getMessage());
-        }
-    }
 
     private void sendAlive() {
-//        for (Process p : allProcesses) {
-//            sendMessage(p, "alive,", 3000);
-//        }
-        broadcast(mainProcess, "alive,", 200);
+        sendToAll(mainProcess, "alive,", 200);
     }
 
-    void broadcast(Process mainProcess, String message, int timeOut) {
+    void sendToAll(Process mainProcess, String message, int timeOut) {
         for (Process p : allProcesses) {
-            System.out.println("+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-");
-            System.out.println("Message: " + message + " i: " + p.getPid() + " Myid: " + mainProcess.getPid());
-//            System.out.println("+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-");
 
-//            if (message.equals("election,")) {
-//                if (p.getPid() > mainProcess.getPid()) {
-//                    Thread t = new Thread(() -> sendMessage(p, message, timeOut));
-//                    t.start();
-//                }
-//            } else {
-//            sendMessage(p, message, timeOut);
-            String temp[] = message.split(",");
-            Thread t = new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    String res = sendMessage(p, message, timeOut);
-                    if (temp[0].equals("election")) {
-                        System.out.println("-----------------------------------");
-                        System.out.println("REEEEEEEES: " + res);
-                        System.out.println("-----------------------------------");
-                    }
+            String[] temp = message.split(",");
+            if (temp[0].equals("election")) {
+                if (p.getPid() > mainProcess.getPid()) {
+                    Thread t = new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                            sendMessage(p, message, timeOut);
+                        }
+                    });
+                    t.start();
                 }
-            });
-            t.start();
-//            }
+            } else {
+                Thread t = new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        sendMessage(p, message, timeOut);
+                    }
+                });
+                t.start();
+            }
         }
     }
 
     void startElection() {
 
-//        for (Process p : allProcesses) {
-//            Thread t = new Thread(new Runnable() {
-//                @Override
-//                public void run() {
-//                    String res = sendMessage(p, "election," + mainProcess.getPid(), 100);
-//                    System.out.println("election result " + res);
-//
-//                    String[] temp = receiveMessage(200);
-//                    System.out.println("election result " + temp[0]);
-//
-//                }
-//            });
-//            t.start();
-//
-//
-//        }
+        sendToAll(mainProcess, "election," + mainProcess.getPid(), 500);
+        boolean isCoordinator = false;
+        String[] res = receiveMessage(1000);
 
+        if (res == null)
+            isCoordinator = true;
 
-        broadcast(mainProcess, "election," + mainProcess.getPid(), 100);
-        boolean isCoordinator = true;
-
-//        for (int i = 0; i < allProcesses.size() - 1; ++i) {
-//            String[] res = receiveMessage(4000);
-//            System.out.println("election result " + res[0]);
-//
-//            if (res[0].equals("victory")) {
-//                isCoordinator = false;
-//            } else if (res[0].equals("election")) {
-//                System.out.println("election from " + res[1]);
-//                if (Integer.parseInt(res[1]) < mainProcess.getPid()) {
-//                    isCoordinator = false;
-//                }
-//            }
-//        }
-//        if (isCoordinator) {
-//            System.out.println("VICTOOOOOOOORYYYYYYYYYYYYYY");
-////            int oldID = mainProcess.getPid();
-//            try {
-//                serverSocket.close();
-//            } catch (IOException e) {
-//                e.printStackTrace();
-//            }
-//            mainProcess.setActive(true);
-//            mainProcess.setCoordinator(true);
-//            mainProcess.setPid(DEFAULT_COORDINATOR_ID);
-////            removePeer(COORDINATOR_DEFAULT);/// remove coordinator
-//            broadcast(mainProcess, "victory,", 100);
-//            startListen();
-//        }
-////            notifyVictory();
-//        startListen();
+        if (isCoordinator) {
+            System.out.println("VICTOOOOOOOORYYYYYYYYYYYYYY");
+            int oldID = mainProcess.getPid();
+            try {
+                serverSocket.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            mainProcess.setActive(true);
+            mainProcess.setCoordinator(true);
+            mainProcess.setPid(DEFAULT_COORDINATOR_ID);
+            sendToAll(mainProcess, "victory," + oldID, 100);
+            startListen();
+        }
+        startListen();
     }
 
 
@@ -276,6 +226,10 @@ public class Master {
         allProcesses.remove(last);
     }
 
+    String[] parseMessage(String message) {
+        return message.split(",");
+    }
+
     String handleReceivedMessages(String[] parsed) {
         switch (parsed[0]) {
             case "new" -> {
@@ -327,4 +281,12 @@ public class Master {
         allProcesses.removeIf(p -> p.getPid() == removedId);
     }
 
+    void initiateServerSocket() {
+        System.out.println("Listening to " + mainProcess.getPid());
+        try {
+            serverSocket = new ServerSocket(mainProcess.getPid());
+        } catch (Exception e) {
+            System.out.println("can't listen on " + e.getMessage());
+        }
+    }
 }
